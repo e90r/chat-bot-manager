@@ -2,6 +2,11 @@ image: python:3.9
 
 variables:
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  REDIS_URL: 'redis://redis:6379/0'
+  SERVER_URL: 'http://0.0.0.0:8000'
+  SECRET_KEY: '2b38c28a4d952320bcabe59f061622785279c757db1e2e128b054635922136bd'
+  SQLITE_URL: 'sqlite:///application.db'
+  ACCESS_TOKEN_EXPIRE_MINUTES: 30
 
 cache:
   paths:
