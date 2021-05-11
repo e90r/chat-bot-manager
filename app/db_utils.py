@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.app_utils import get_password_hash
 from app.config import settings
-from app.db_models import RoleEnum, User
+from app.db_models import Bot, Command, RoleEnum, User
 
 engine = create_engine(settings.sqlite_url, connect_args={'check_same_thread': False})
 SessionLocal = sessionmaker(bind=engine)
@@ -22,11 +22,14 @@ def insert_initial_data(session: Session) -> None:
         session.bulk_save_objects(
             [
                 User(
+                    id=1,
                     username='admin',
                     hashed_password=get_password_hash('admin'),
                     full_name='Admin',
                     role=RoleEnum.ADMIN,
-                )
+                ),
+                Bot(id=0, name='ExampleBot', author_id=1),
+                Command(id=0, message='Hey', response='Hi From Bot', bot_id=0),
             ]
         )
 

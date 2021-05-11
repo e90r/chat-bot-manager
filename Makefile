@@ -12,7 +12,7 @@ venv:
 
 .PHONY: test
 test:
-	$(VENV)/bin/pytest -v tests
+	pytest -v tests
 
 .PHONY: lint
 lint:

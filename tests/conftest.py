@@ -1,4 +1,5 @@
 # pylint: disable=redefined-outer-name
+# pylint: disable=unused-argument
 from contextlib import contextmanager
 from datetime import timedelta
 from typing import Any, Dict, Optional
@@ -12,8 +13,8 @@ from sqlalchemy.orm import sessionmaker
 
 from app.app_utils import get_password_hash
 from app.config import ALGORITHM, settings
-from app.db_models import Bot, RoleEnum, User
-from app.db_utils import get_session, insert_initial_data
+from app.db_models import Bot, Command, RoleEnum, User
+from app.db_utils import get_session
 from app.factory import create_app
 from app.redis_utils import redis_dao
 
@@ -58,7 +59,7 @@ def test_session():
 @pytest.fixture()
 def mock_auth(mocker):
     mocker.patch(
-        'app.handlers.create_access_token',
+        'app.routers.users.create_access_token',
         side_effect=create_access_token_without_expire,
     )
 
@@ -71,7 +72,18 @@ def create_test_database(test_app):
 
     models.Base.metadata.create_all(test_engine)
     with create_test_session() as session:
-        insert_initial_data(session)
+        if session.query(User).count() == 0:
+            session.bulk_save_objects(
+                [
+                    User(
+                        id=1,
+                        username='admin',
+                        hashed_password=get_password_hash('admin'),
+                        full_name='Admin',
+                        role=RoleEnum.ADMIN,
+                    )
+                ]
+            )
     yield
     models.Base.metadata.drop_all(test_engine)
 
@@ -132,10 +144,19 @@ def token_admin():
 
 
 @pytest.fixture()
-async def add_data(session):
+async def bot(session):
     bot = Bot(id=1, name='test_bot', author_id=1)
     session.add(bot)
     session.commit()
-    await redis_dao.redis.hset('1:id', 0, 'Hello')
-    await redis_dao.redis.hset('1:msg', 'Hello', 'Hello from bot!')
+
+
+@pytest.fixture()
+async def _hello_message(bot, session):
+    command = Command(id=1, message='Hello', response='Hello from bot!', bot_id=1)
+    session.add(command)
+    session.commit()
+
+
+@pytest.fixture()
+async def _existed_bot_message(bot):
     await redis_dao.redis.rpush('hist:1:1', 'admin: first message')

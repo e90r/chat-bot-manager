@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
 
-from fastapi import Depends, HTTPException, WebSocket, Request
+from fastapi import Depends, HTTPException, Request, WebSocket
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
@@ -9,7 +9,7 @@ from starlette import status
 
 from app.app_utils import verify_password
 from app.config import ALGORITHM, settings
-from app.db_models import User
+from app.db_models import RoleEnum, User
 from app.db_utils import get_session, get_user
 from app.pydantic_models import TokenData
 
@@ -46,7 +46,7 @@ def create_access_token(
     return encoded_jwt
 
 
-async def get_current_user(
+def get_current_user(
     session: Session = Depends(get_session), token: str = Depends(oauth2_scheme)
 ) -> Optional[User]:
     credentials_exception = HTTPException(
@@ -69,3 +69,13 @@ async def get_current_user(
         raise credentials_exception
 
     return user
+
+
+def verify_role_admin(current_user: User = Depends(get_current_user)) -> User:
+    if current_user.role != RoleEnum.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='Permission denied',
+        )
+
+    return current_user

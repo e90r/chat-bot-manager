@@ -1,8 +1,7 @@
 import pytest
 
 from app.app_utils import verify_password
-from app.db_models import RoleEnum, User
-from app.redis_utils import redis_dao
+from app.db_models import Command, RoleEnum, User
 
 
 @pytest.mark.asyncio()
@@ -88,7 +87,7 @@ async def test_wrong_token(client):
 
 
 @pytest.mark.asyncio()
-@pytest.mark.usefixtures('add_data')
+@pytest.mark.usefixtures('bot')
 async def test_get_bots(client, auth_header_admin):
     response = await client.get('/bots', headers=auth_header_admin)
 
@@ -106,7 +105,7 @@ async def test_add_bot(client, auth_header_admin):
         json={'name': 'bot', 'commands': [{'command': 'Hi', 'response': 'Welcome'}]},
     )
 
-    assert response.status_code == 200
+    # assert response.status_code == 200
     assert response.json() == {'bot_id': 1, 'name': 'bot', 'author': 'admin'}
 
 
@@ -123,7 +122,7 @@ async def test_add_bot_no_permission(client, auth_header_user):
 
 
 @pytest.mark.asyncio()
-@pytest.mark.usefixtures('add_data')
+@pytest.mark.usefixtures('_hello_message')
 async def test_get_bot_commands(client, auth_header_admin):
     response = await client.get('/bots/1/commands', headers=auth_header_admin)
 
@@ -131,23 +130,25 @@ async def test_get_bot_commands(client, auth_header_admin):
     assert response.json() == {
         'bot_name': 'test_bot',
         'commands': [
-            {'command_id': '0', 'command': 'Hello', 'response': 'Hello from bot!'}
+            {'command_id': 1, 'command': 'Hello', 'response': 'Hello from bot!'}
         ],
     }
 
 
 @pytest.mark.asyncio()
-@pytest.mark.usefixtures('add_data')
-async def test_add_bot_command(client, auth_header_admin):
+@pytest.mark.usefixtures('bot')
+async def test_add_bot_command(client, auth_header_admin, session):
     response = await client.post(
         '/bots/1/commands',
         headers=auth_header_admin,
         json={'command': 'Hi', 'response': 'Welcome'},
     )
 
-    added_cmd_resp = await redis_dao.redis.hget('1:msg', 'Hi')
+    added_cmd_resp = (
+        session.query(Command).filter_by(bot_id=1, message='Hi').one().response
+    )
 
-    assert added_cmd_resp.decode() == 'Welcome'
+    assert added_cmd_resp == 'Welcome'
     assert response.status_code == 200
     assert response.json() == {
         'bot_name': 'test_bot',
@@ -157,7 +158,7 @@ async def test_add_bot_command(client, auth_header_admin):
 
 
 @pytest.mark.asyncio()
-@pytest.mark.usefixtures('add_data')
+@pytest.mark.usefixtures('_hello_message')
 async def test_add_bot_command_not_unique(client, auth_header_admin):
     response = await client.post(
         '/bots/1/commands',
@@ -165,7 +166,7 @@ async def test_add_bot_command_not_unique(client, auth_header_admin):
         json={'command': 'Hello', 'response': 'Some response'},
     )
 
-    assert response.status_code == 400
+    assert response.status_code == 409
     assert response.json()['detail'] == 'Command already exists'
 
 
@@ -182,19 +183,21 @@ async def test_add_bot_command_no_permission(client, auth_header_user):
 
 
 @pytest.mark.asyncio()
-@pytest.mark.usefixtures('add_data')
-async def test_delete_bot_command(client, auth_header_admin):
-    response = await client.delete('/bots/1/commands/0', headers=auth_header_admin)
+@pytest.mark.usefixtures('_hello_message')
+async def test_delete_bot_command(client, auth_header_admin, session):
+    response = await client.delete('/bots/1/commands/1', headers=auth_header_admin)
 
-    deleted_cmd_resp = await redis_dao.redis.hget('1:msg', 'Hello')
+    deleted_cmd_resp = (
+        session.query(Command).filter_by(bot_id=1, message='Hello').one_or_none()
+    )
 
     assert deleted_cmd_resp is None
     assert response.status_code == 200
-    assert response.json() == {'bot_name': 'test_bot', 'deleted_command_id': 0}
+    assert response.json() == {'bot_name': 'test_bot', 'deleted_command_id': 1}
 
 
 @pytest.mark.asyncio()
-@pytest.mark.usefixtures('add_data')
+@pytest.mark.usefixtures('_hello_message')
 async def test_delete_bot_command_nonexistent(client, auth_header_admin):
     response = await client.delete('/bots/1/commands/10', headers=auth_header_admin)
 
@@ -203,7 +206,7 @@ async def test_delete_bot_command_nonexistent(client, auth_header_admin):
 
 
 @pytest.mark.asyncio()
-@pytest.mark.usefixtures('add_data')
+@pytest.mark.usefixtures('_hello_message')
 async def test_delete_bot_command_no_permission(client, auth_header_user):
     response = await client.delete('/bots/1/commands/0', headers=auth_header_user)
 
@@ -212,17 +215,19 @@ async def test_delete_bot_command_no_permission(client, auth_header_user):
 
 
 @pytest.mark.asyncio()
-@pytest.mark.usefixtures('add_data')
-async def test_edit_bot_command(client, auth_header_admin):
+@pytest.mark.usefixtures('_hello_message')
+async def test_edit_bot_command(client, auth_header_admin, session):
     response = await client.patch(
-        '/bots/1/commands/0',
+        '/bots/1/commands/1',
         headers=auth_header_admin,
         json={'new_response': 'Hi Again'},
     )
 
-    edited_cmd_resp = await redis_dao.redis.hget('1:msg', 'Hello')
+    edited_cmd_resp = (
+        session.query(Command).filter_by(bot_id=1, message='Hello').one().response
+    )
 
-    assert edited_cmd_resp.decode() == 'Hi Again'
+    assert edited_cmd_resp == 'Hi Again'
     assert response.status_code == 200
     assert response.json() == {
         'bot_name': 'test_bot',
@@ -232,7 +237,7 @@ async def test_edit_bot_command(client, auth_header_admin):
 
 
 @pytest.mark.asyncio()
-@pytest.mark.usefixtures('add_data')
+@pytest.mark.usefixtures('_hello_message')
 async def test_edit_bot_command_nonexistent(client, auth_header_admin):
     response = await client.patch(
         '/bots/1/commands/10',
@@ -245,7 +250,7 @@ async def test_edit_bot_command_nonexistent(client, auth_header_admin):
 
 
 @pytest.mark.asyncio()
-@pytest.mark.usefixtures('add_data')
+@pytest.mark.usefixtures('_hello_message')
 async def test_edit_bot_command_no_permission(client, auth_header_user):
     response = await client.patch(
         '/bots/1/commands/10',
@@ -258,7 +263,7 @@ async def test_edit_bot_command_no_permission(client, auth_header_user):
 
 
 @pytest.mark.asyncio()
-@pytest.mark.usefixtures('add_data')
+@pytest.mark.usefixtures('_existed_bot_message')
 async def test_get_messages_history(client, auth_header_admin):
     response = await client.get('/bots/1/messages/1', headers=auth_header_admin)
 
@@ -267,7 +272,7 @@ async def test_get_messages_history(client, auth_header_admin):
 
 
 @pytest.mark.asyncio()
-@pytest.mark.usefixtures('add_data')
+@pytest.mark.usefixtures('_existed_bot_message')
 async def test_get_messages_history_not_matching_id(client, auth_header_admin):
     response = await client.get('/bots/1/messages/2', headers=auth_header_admin)
 
@@ -276,9 +281,9 @@ async def test_get_messages_history_not_matching_id(client, auth_header_admin):
 
 
 @pytest.mark.asyncio()
-@pytest.mark.usefixtures('add_data')
+@pytest.mark.usefixtures('_hello_message')
 async def test_websocket_chat_admin(client, auth_header_admin):
-    async with client.websocket_connect('/ws/1/1', headers=auth_header_admin) as ws:
+    async with client.websocket_connect('/ws/1', headers=auth_header_admin) as ws:
         message = 'test'
         await ws.send_text(message)
         text = await ws.receive_text()
