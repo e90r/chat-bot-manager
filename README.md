@@ -32,7 +32,7 @@
 
 ### Run client:
 
-    docker-compose run --rm app make test
+    python -m client.run
 
 ### Create venv:
 
